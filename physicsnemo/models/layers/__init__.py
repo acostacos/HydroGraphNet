@@ -55,3 +55,8 @@ from .transformer_layers import (
 )
 from .weight_fact import WeightFactLinear
 from .weight_norm import WeightNormLinear
+
+from .kan_layers import KolmogorovArnoldNetwork
+
+from .kan_layers import KolmogorovArnoldNetwork
+from .kan_layers import KolmogorovArnoldNetwork
