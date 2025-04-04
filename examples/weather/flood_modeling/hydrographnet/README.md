@@ -72,9 +72,35 @@ To perform autoregressive rollout and generate evaluation animations:
   <img src="./outputs/animations/sample_animation.gif" alt="Flood Forecasting Animation" width="600"/>
 </p>
 
+## Dataset Loading
+
+The dataset is handled via a custom `HydroGraphDataset` class, defined in `hydrographnet_dataset.py`. This class inherits from `DGLDataset` and performs the following:
+
+- **Automatic downloading**: If data is not available in the `data_dir`, it will automatically be downloaded from [Zenodo](https://zenodo.org/record/14969507).
+- **Graph construction**: Constructs a spatial graph using k-nearest neighbors over node coordinates.
+- **Static and dynamic features**: Loads and normalizes both spatial attributes (e.g., slope, curvature) and temporal inputs (e.g., water depth, precipitation).
+- **Training mode**: Returns sliding window graph samples with optional physics-aware targets.
+- **Test mode**: Returns a full graph and a rollout dictionary for inference.
+
+To use the dataset, simply instantiate:
+
+```python
+from hydrographnet_dataset import HydroGraphDataset
+
+dataset = HydroGraphDataset(
+    data_dir="./data",
+    prefix="M80",
+    split="train",  # or "test"
+    n_time_steps=2,
+    return_physics=True
+)
+```
+
+This will ensure the data is downloaded, normalized, and ready for GNN training or evaluation.
+
 ## Logging
 
-HydroGraphNet supports logging via [Weights & Biases (W&B)](https://wandb.ai/) and optionally TensorBoard. Logs include:
+HydroGraphNet supports logging via [Weights & Biases (W&B)](https://wandb.ai/):
 - Training and validation losses
 - Physics-based loss contributions
 - Learning rate schedule
