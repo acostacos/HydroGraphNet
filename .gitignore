@@ -171,3 +171,5 @@ multirun/
 
 # SLURM
 slurm-*.out
+
+**/outputs_phy/

@@ -13,7 +13,7 @@ hydra:
 
 # Data configuration: paths for training and testing datasets.
 data_dir: ./data
-test_dir: './data/Test
+test_dir: './data/Test'
 
 # Training configuration.
 batch_size: 1
