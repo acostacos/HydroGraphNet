@@ -1,5 +1,5 @@
 import sys
-sys.path.append('C:\\Users\\Carlo\\Documents\\School\\Masters\\NUS\\Dissertation\\modulus')
+sys.path.append('C:\\Users\\Carlo\\Documents\\School\\Masters\\NUS\\Dissertation\\HydroGraphNet')
 
 import time
 import hydra
