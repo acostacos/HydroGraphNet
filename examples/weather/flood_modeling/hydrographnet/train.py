@@ -1,3 +1,6 @@
+import sys
+sys.path.append('C:\\Users\\Carlo\\Documents\\School\\Masters\\NUS\\Dissertation\\modulus')
+
 import time
 import hydra
 from hydra.utils import to_absolute_path
@@ -228,13 +231,13 @@ class MGNTrainer:
 def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
-    initialize_wandb(
-        project="Modulus-Launch",
-        entity="Modulus",
-        name="Vortex_Shedding-Training",
-        group="Vortex_Shedding-DDP-Group",
-        mode=cfg.wandb_mode,
-    )
+    # initialize_wandb(
+    #     project="Modulus-Launch",
+    #     entity="Modulus",
+    #     name="Vortex_Shedding-Training",
+    #     group="Vortex_Shedding-DDP-Group",
+    #     mode=cfg.wandb_mode,
+    # )
     logger = PythonLogger("main")
     rank_zero_logger = RankZeroLoggingWrapper(logger, dist)
     rank_zero_logger.file_logging()
