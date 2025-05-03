@@ -1,5 +1,10 @@
-import sys
-sys.path.append('C:\\Users\\Carlo\\Documents\\School\\Masters\\NUS\\Dissertation\\HydroGraphNet')
+try:
+    import os
+    import sys
+    base_dir = os.environ['HGN_BASE_DIR']
+    sys.path.append(base_dir)
+except:
+    print("HGN_BASE_DIR not set. Please set it to the HydroGraphNet base directory.", flush=True)
 
 import time
 import hydra
