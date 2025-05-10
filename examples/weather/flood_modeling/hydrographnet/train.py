@@ -69,7 +69,7 @@ class MGNTrainer:
             k=4,
             noise_type=cfg.noise_type,
             noise_std=0.01,
-            hydrograph_ids_file="train.txt",
+            hydrograph_ids_file=cfg.train_ids_file,
             split="train",
             force_reload=False,
             verbose=False,
@@ -121,10 +121,10 @@ class MGNTrainer:
         self.model.train()
         self.criterion = nn.MSELoss()
         try:
-            if cfg.use_apex:
-                from apex.optimizers import FusedAdam
-                self.optimizer = FusedAdam(self.model.parameters(), lr=cfg.lr)
-            else:
+            # if cfg.use_apex:
+            #     from apex.optimizers import FusedAdam
+            #     self.optimizer = FusedAdam(self.model.parameters(), lr=cfg.lr)
+            # else:
                 self.optimizer = None
         except ImportError:
             rank_zero_logger.warning("NVIDIA Apex is not installed; FusedAdam optimizer will not be used.")

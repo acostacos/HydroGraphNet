@@ -26,6 +26,8 @@ weight_decay: 0.0001
 num_input_features: 16    # Number of node input features.
 num_output_features: 2    # Number of output features (e.g., depth and volume differences).
 num_edge_features: 3      # Number of edge features.
+train_ids_file: 'train.txt'
+test_ids_file: 'test.txt'
 
 # Noise settings.
 noise_type: "none"        # Options: "none", "pushforward", "only_last", "correlated", etc.
