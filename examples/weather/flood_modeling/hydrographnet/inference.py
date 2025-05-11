@@ -260,7 +260,7 @@ def main(cfg: DictConfig):
 
         validation_stats.print_stats_summary()
 
-        metrics_filename = f"metrics_{sample_id}.npz"
+        metrics_filename = f"HydroGraphNet_{sample_id}_metrics.npz"
         metrics_path = os.path.join(metrics_output_dir, metrics_filename)
         validation_stats.save_stats(metrics_path)
 
