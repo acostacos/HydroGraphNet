@@ -17,7 +17,7 @@ test_dir: './data'
 
 # Training configuration.
 batch_size: 1
-epochs: 10
+epochs: 100
 num_training_samples: 400
 num_training_time_steps: 300
 lr: 0.0001
@@ -26,8 +26,8 @@ weight_decay: 0.0001
 num_input_features: 16    # Number of node input features.
 num_output_features: 2    # Number of output features (e.g., depth and volume differences).
 num_edge_features: 3      # Number of edge features.
-train_ids_file: '0_dummy_train.txt'
-test_ids_file: '0_dummy_test.txt'
+train_ids_file: '0_train.txt'
+test_ids_file: '0_test.txt'
 
 # Noise settings.
 noise_type: "none"        # Options: "none", "pushforward", "only_last", "correlated", etc.
