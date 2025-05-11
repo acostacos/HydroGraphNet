@@ -13,11 +13,11 @@ hydra:
 
 # Data configuration: paths for training and testing datasets.
 data_dir: ./data
-test_dir: './data/Test'
+test_dir: './data'
 
 # Training configuration.
 batch_size: 1
-epochs: 100
+epochs: 10
 num_training_samples: 400
 num_training_time_steps: 300
 lr: 0.0001
@@ -26,8 +26,8 @@ weight_decay: 0.0001
 num_input_features: 16    # Number of node input features.
 num_output_features: 2    # Number of output features (e.g., depth and volume differences).
 num_edge_features: 3      # Number of edge features.
-train_ids_file: 'train.txt'
-test_ids_file: 'test.txt'
+train_ids_file: '0_dummy_train.txt'
+test_ids_file: '0_dummy_test.txt'
 
 # Noise settings.
 noise_type: "none"        # Options: "none", "pushforward", "only_last", "correlated", etc.
@@ -57,3 +57,4 @@ ckpt_path: "./checkpoints_phy"
 # Test and visualization configuration.
 num_test_samples: 10
 num_test_time_steps: 30
+metrics_save_path: "./metrics/validation_metrics.npz"

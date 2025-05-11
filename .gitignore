@@ -173,3 +173,4 @@ multirun/
 slurm-*.out
 
 **/outputs_phy/
+**/checkpoints_phy/

@@ -40,39 +40,39 @@ def create_hydrograph_id_files(event_keys: list[str], dataset_folder: str):
 def create_constant_text_files(hec_ras_filepath: str, node_shp_filepath: str, dem_path: str, dataset_folder: str, prefix: str):
     pos = get_cell_position(node_shp_filepath)
     pos_path = os.path.join(dataset_folder, f"{prefix}_XY.txt")
-    np.savetxt(pos_path, pos)
+    np.savetxt(pos_path, pos, delimiter='\t')
 
     area = get_cell_area(hec_ras_filepath)
     area_path = os.path.join(dataset_folder, f"{prefix}_CA.txt")
-    np.savetxt(area_path, area)
+    np.savetxt(area_path, area, delimiter='\t')
 
     elevation = get_cell_elevation(node_shp_filepath)
     elevation_path = os.path.join(dataset_folder, f"{prefix}_CE.txt")
-    np.savetxt(elevation_path, elevation)
+    np.savetxt(elevation_path, elevation, delimiter='\t')
 
     manning = get_roughness(hec_ras_filepath)
     manning_path = os.path.join(dataset_folder, f"{prefix}_N.txt")
-    np.savetxt(manning_path, manning)
+    np.savetxt(manning_path, manning, delimiter='\t')
 
     slope = get_cell_slope()
     slope_path = os.path.join(dataset_folder, f"{prefix}_CS.txt")
-    np.savetxt(slope_path, slope)
+    np.savetxt(slope_path, slope, delimiter='\t')
 
     aspect = get_cell_aspect()
     aspect_path = os.path.join(dataset_folder, f"{prefix}_A.txt")
-    np.savetxt(aspect_path, aspect)
+    np.savetxt(aspect_path, aspect, delimiter='\t')
 
     curvature = get_cell_curvature()
     curvature_path = os.path.join(dataset_folder, f"{prefix}_CU.txt")
-    np.savetxt(curvature_path, curvature)
+    np.savetxt(curvature_path, curvature, delimiter='\t')
 
     infiltration = get_cell_infiltration(len(pos))
     infiltration_path = os.path.join(dataset_folder, f"{prefix}_IP.txt")
-    np.savetxt(infiltration_path, infiltration)
+    np.savetxt(infiltration_path, infiltration, delimiter='\t')
 
     flow_accum = get_cell_flow_accumulation()
     flow_accum_path = os.path.join(dataset_folder, f"{prefix}_FA.txt")
-    np.savetxt(flow_accum_path, flow_accum)
+    np.savetxt(flow_accum_path, flow_accum, delimiter='\t')
 
 def create_dynamic_text_files(hec_ras_filepath: str, node_shp_filepath: str, dataset_folder: str, prefix: str, hydrograph_id: str):
     water_level = get_water_level(hec_ras_filepath)
@@ -80,11 +80,11 @@ def create_dynamic_text_files(hec_ras_filepath: str, node_shp_filepath: str, dat
     water_depth = np.clip(water_level - elevation, a_min=0)
     assert np.all(water_depth > 0)
     water_depth_path = os.path.join(dataset_folder, f"{prefix}_WD_{hydrograph_id}.txt")
-    np.savetxt(water_depth_path, water_depth)
+    np.savetxt(water_depth_path, water_depth, delimiter='\t')
 
     precipitation = get_rainfall(hec_ras_filepath)
     precipitation_path = os.path.join(dataset_folder, f"{prefix}_Pr_{hydrograph_id}.txt")
-    np.savetxt(precipitation_path, precipitation)
+    np.savetxt(precipitation_path, precipitation, delimiter='\t')
 
     # TODO: How to get inflow and volume?
     # inflow_path = os.path.join(folder, f"{prefix}_US_InF_{hydrograph_id}.txt")

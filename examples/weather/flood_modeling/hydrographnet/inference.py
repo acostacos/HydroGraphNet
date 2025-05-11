@@ -14,6 +14,14 @@ For each sample, a fancy four-panel animation is generated that shows:
 The model checkpoint is loaded using the provided load_checkpoint utility.
 """
 
+try:
+    import os
+    import sys
+    base_dir = os.environ['HGN_BASE_DIR']
+    sys.path.append(base_dir)
+except:
+    print("HGN_BASE_DIR not set. Please set it to the HydroGraphNet base directory.", flush=True)
+
 import os
 import torch
 import hydra
@@ -22,6 +30,8 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from omegaconf import DictConfig, OmegaConf
 from hydra.utils import to_absolute_path
+from validation_stats import ValidationStats
+from logging_utils import Logger
 
 # Import the load_checkpoint utility from Modulus Launch.
 from physicsnemo.launch.utils import load_checkpoint
@@ -141,6 +151,7 @@ def main(cfg: DictConfig):
     data_dir = cfg.get("test_dir")
     test_ids_file = cfg.get("test_ids_file", "test.txt")
     ckpt_path = cfg.get("ckpt_path")
+    metrics_save_path = cfg.get("metrics_save_path", "metrics/validation_stats.npz")
     anim_output_dir = cfg.get("animation_output_dir", "animations")
     os.makedirs(anim_output_dir, exist_ok=True)
 
@@ -180,6 +191,7 @@ def main(cfg: DictConfig):
     model.eval()
 
     all_rmse_all = []
+    validation_stats = ValidationStats(logger=Logger())
 
     # Loop over each test hydrograph.
     for idx in range(len(test_dataset)):
@@ -230,11 +242,14 @@ def main(cfg: DictConfig):
             X_iter = torch.cat([static_part_updated, water_depth_updated, volume_updated], dim=1)
 
             # Save the predicted actual water depth.
-            rollout_preds.append(new_wd.squeeze(1).detach().cpu())
-            ground_truth_list.append(wd_gt_seq[t].detach().cpu())
+            rollout = new_wd.squeeze(1).detach().cpu()
+            ground_truth = wd_gt_seq[t].detach().cpu()
+            rollout_preds.append(rollout)
+            ground_truth_list.append(ground_truth)
+            validation_stats.update_stats_for_epoch(rollout, ground_truth)
 
             # Compute RMSE for this rollout step.
-            rmse = torch.sqrt(torch.mean((new_wd.squeeze(1) - wd_gt_seq[t]) ** 2)).item()
+            rmse = torch.sqrt(torch.mean((new_wd.squeeze(1) - wd_gt_seq[t].to(device)) ** 2)).item()
             rmse_list.append(rmse)
 
         all_rmse_all.append(rmse_list)
@@ -242,28 +257,32 @@ def main(cfg: DictConfig):
         sample_id = test_dataset.dynamic_data[idx].get('hydro_id', idx)
         print(f"Hydrograph {sample_id}: Mean RMSE = {mean_rmse_sample:.4f}")
 
-        anim_filename = os.path.join(anim_output_dir, f"animation_{sample_id}.gif")
-        create_animation(rollout_preds, ground_truth_list, g, rmse_list, anim_filename)
+        # anim_filename = os.path.join(anim_output_dir, f"animation_{sample_id}.gif")
+        # create_animation(rollout_preds, ground_truth_list, g, rmse_list, anim_filename)
 
+    validation_stats.print_stats_summary()
+    validation_stats.save_stats(metrics_save_path)
+
+    # HydroGraphNet validation stats.
     all_rmse_tensor = torch.tensor(all_rmse_all)
     overall_mean_rmse = torch.mean(all_rmse_tensor, dim=0)
     overall_std_rmse = torch.std(all_rmse_tensor, dim=0)
     print("Overall Mean RMSE over rollout steps:", overall_mean_rmse)
     print("Overall Std RMSE over rollout steps:", overall_std_rmse)
 
-    timesteps = [(i + 1) * (20 / 60) for i in range(rollout_length)]
-    plt.figure(figsize=(10, 6))
-    plt.plot(timesteps, overall_mean_rmse.numpy(), label="Mean RMSE", linewidth=3)
-    plt.fill_between(timesteps,
-                     (overall_mean_rmse - overall_std_rmse).numpy(),
-                     (overall_mean_rmse + overall_std_rmse).numpy(),
-                     alpha=0.3, label="± Std")
-    plt.xlabel("Time (Hours)", fontsize=20)
-    plt.ylabel("RMSE (Water Depth)", fontsize=20)
-    plt.title("Overall RMSE Curve Over Rollout", fontsize=24)
-    plt.legend(fontsize=16)
-    plt.grid(True)
-    plt.show()
+    # timesteps = [(i + 1) * (20 / 60) for i in range(rollout_length)]
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(timesteps, overall_mean_rmse.numpy(), label="Mean RMSE", linewidth=3)
+    # plt.fill_between(timesteps,
+    #                  (overall_mean_rmse - overall_std_rmse).numpy(),
+    #                  (overall_mean_rmse + overall_std_rmse).numpy(),
+    #                  alpha=0.3, label="± Std")
+    # plt.xlabel("Time (Hours)", fontsize=20)
+    # plt.ylabel("RMSE (Water Depth)", fontsize=20)
+    # plt.title("Overall RMSE Curve Over Rollout", fontsize=24)
+    # plt.legend(fontsize=16)
+    # plt.grid(True)
+    # plt.show()
 
 
 if __name__ == "__main__":
