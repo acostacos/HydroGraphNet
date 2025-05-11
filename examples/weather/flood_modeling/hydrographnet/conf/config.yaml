@@ -57,4 +57,4 @@ ckpt_path: "./checkpoints_phy"
 # Test and visualization configuration.
 num_test_samples: 10
 num_test_time_steps: 30
-metrics_save_path: "./metrics/validation_metrics.npz"
+metrics_output_dir: "./metrics"

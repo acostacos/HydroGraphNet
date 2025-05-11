@@ -151,7 +151,7 @@ def main(cfg: DictConfig):
     data_dir = cfg.get("test_dir")
     test_ids_file = cfg.get("test_ids_file", "test.txt")
     ckpt_path = cfg.get("ckpt_path")
-    metrics_save_path = cfg.get("metrics_save_path", "metrics/validation_stats.npz")
+    metrics_output_dir = cfg.get("metrics_output_dir", "metrics")
     anim_output_dir = cfg.get("animation_output_dir", "animations")
     os.makedirs(anim_output_dir, exist_ok=True)
 
@@ -191,7 +191,7 @@ def main(cfg: DictConfig):
     model.eval()
 
     all_rmse_all = []
-    validation_stats = ValidationStats(logger=Logger())
+    logger = Logger()
 
     # Loop over each test hydrograph.
     for idx in range(len(test_dataset)):
@@ -201,6 +201,7 @@ def main(cfg: DictConfig):
         X_current = g.ndata["x"].to(device)  # Expected shape: [num_nodes, 16]
         num_nodes = X_current.size(0)
 
+        validation_stats = ValidationStats(logger=logger)
         rollout_preds = []       # To store predicted actual water depth values for each step.
         ground_truth_list = []   # To store ground truth water depth values.
         rmse_list = []           # RMSE at each rollout step.
@@ -257,11 +258,14 @@ def main(cfg: DictConfig):
         sample_id = test_dataset.dynamic_data[idx].get('hydro_id', idx)
         print(f"Hydrograph {sample_id}: Mean RMSE = {mean_rmse_sample:.4f}")
 
+        validation_stats.print_stats_summary()
+
+        metrics_filename = f"metrics_{sample_id}.npz"
+        metrics_path = os.path.join(metrics_output_dir, metrics_filename)
+        validation_stats.save_stats(metrics_path)
+
         # anim_filename = os.path.join(anim_output_dir, f"animation_{sample_id}.gif")
         # create_animation(rollout_preds, ground_truth_list, g, rmse_list, anim_filename)
-
-    validation_stats.print_stats_summary()
-    validation_stats.save_stats(metrics_save_path)
 
     # HydroGraphNet validation stats.
     all_rmse_tensor = torch.tensor(all_rmse_all)
