@@ -252,11 +252,10 @@ def main(cfg: DictConfig):
             rollout = new_wd.squeeze(1).detach().cpu()
             ground_truth = wd_gt_seq[t].detach().cpu()
 
-            assert torch.all(ground_truth > 0), "Ground truth water depth should be positive."
-            # CLIP_NEGATIVE_WATER_DEPTH = True
-            # if CLIP_NEGATIVE_WATER_DEPTH:
-            #     # Clip negative values for water depth
-            #     new_wd = torch.clip(new_wd, min=0)
+            CLIP_NEGATIVE_WATER_DEPTH = True
+            if CLIP_NEGATIVE_WATER_DEPTH:
+                # Clip negative values for water depth. Ground truth contains negative values.
+                new_wd = torch.clip(new_wd, min=0)
 
             rollout_preds.append(rollout)
             ground_truth_list.append(ground_truth)
