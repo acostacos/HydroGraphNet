@@ -214,6 +214,7 @@ def main(cfg: DictConfig):
 
         X_iter = X_current.clone()
 
+        validation_stats.start_validate()
         for t in range(rollout_length):
             # Split into static and dynamic parts.
             static_part = X_iter[:, :12]  # columns 0-11: static features (including flow/precip)
@@ -247,11 +248,12 @@ def main(cfg: DictConfig):
             ground_truth = wd_gt_seq[t].detach().cpu()
             rollout_preds.append(rollout)
             ground_truth_list.append(ground_truth)
-            validation_stats.update_stats_for_epoch(rollout, ground_truth)
+            validation_stats.update_stats_for_epoch(rollout, ground_truth, water_threshold=0.05)
 
             # Compute RMSE for this rollout step.
-            rmse = torch.sqrt(torch.mean((new_wd.squeeze(1) - wd_gt_seq[t].to(device)) ** 2)).item()
+            rmse = torch.sqrt(torch.mean((new_wd.squeeze(1) - wd_gt_seq[t]) ** 2)).item()
             rmse_list.append(rmse)
+        validation_stats.end_validate()
 
         all_rmse_all.append(rmse_list)
         mean_rmse_sample = sum(rmse_list) / len(rmse_list)
