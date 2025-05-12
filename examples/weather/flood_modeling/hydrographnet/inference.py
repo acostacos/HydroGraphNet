@@ -229,11 +229,6 @@ def main(cfg: DictConfig):
             new_wd = water_depth_window[:, -1:] + pred[:, 0:1]
             new_vol = volume_window[:, -1:] + pred[:, 1:2]
 
-            CLIP_NEGATIVE_WATER_DEPTH = True
-            if CLIP_NEGATIVE_WATER_DEPTH:
-                # Clip negative values for water depth
-                new_wd = torch.clip(new_wd, min=0)
-
             # Update dynamic window: drop the oldest time step and append the new prediction.
             water_depth_updated = torch.cat([water_depth_window[:, 1:], new_wd], dim=1)
             volume_updated = torch.cat([volume_window[:, 1:], new_vol], dim=1)
@@ -251,15 +246,22 @@ def main(cfg: DictConfig):
             # Save the predicted actual water depth.
             rollout = new_wd.squeeze(1).detach().cpu()
             ground_truth = wd_gt_seq[t].detach().cpu()
+            rollout_preds.append(rollout)
+            ground_truth_list.append(ground_truth)
 
             CLIP_NEGATIVE_WATER_DEPTH = True
             if CLIP_NEGATIVE_WATER_DEPTH:
-                # Clip negative values for water depth. Ground truth contains negative values.
-                new_wd = torch.clip(new_wd, min=0)
+                wd_mean = test_dataset.dynamic_stats["water_depth"]["mean"]
+                wd_std = test_dataset.dynamic_stats["water_depth"]["std"]
 
-            rollout_preds.append(rollout)
-            ground_truth_list.append(ground_truth)
-            validation_stats.update_stats_for_epoch(rollout, ground_truth, water_threshold=0.05)
+                # Clip negative values for water depth
+                rollout = HydroGraphDataset.denormalize(rollout, wd_mean, wd_std)
+                rollout = torch.clip(rollout, min=0)
+
+                ground_truth = HydroGraphDataset.denormalize(ground_truth, wd_mean, wd_std)
+                ground_truth = torch.clip(ground_truth, min=0)
+
+            validation_stats.update_stats_for_epoch(ground_truth, ground_truth, water_threshold=0.05)
 
             # Compute RMSE for this rollout step.
             rmse = torch.sqrt(torch.mean((new_wd.squeeze(1) - wd_gt_seq[t]) ** 2)).item()
