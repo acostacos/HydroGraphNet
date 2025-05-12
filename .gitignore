@@ -173,5 +173,5 @@ multirun/
 slurm-*.out
 
 **/outputs_phy/
-**/checkpoints_phy/
+**/checkpoints_phy*/
 slurm_logs/
