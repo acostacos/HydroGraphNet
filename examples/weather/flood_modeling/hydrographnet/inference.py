@@ -261,7 +261,9 @@ def main(cfg: DictConfig):
                 ground_truth = HydroGraphDataset.denormalize(ground_truth, wd_mean, wd_std)
                 ground_truth = torch.clip(ground_truth, min=0)
 
-            validation_stats.update_stats_for_epoch(rollout, ground_truth, water_threshold=0.05)
+            validation_stats.update_stats_for_epoch(rollout[:, None],
+                                                    ground_truth[:, None],
+                                                    water_threshold=0.05)
 
             # Compute RMSE for this rollout step.
             rmse = torch.sqrt(torch.mean((new_wd.squeeze(1) - wd_gt_seq[t]) ** 2)).item()
