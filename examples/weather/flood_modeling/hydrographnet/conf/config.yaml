@@ -16,7 +16,7 @@ data_dir: ./data
 test_dir: './data'
 
 # Training configuration.
-batch_size: 1
+batch_size: 32
 epochs: 100
 num_training_samples: 400
 num_training_time_steps: 300
