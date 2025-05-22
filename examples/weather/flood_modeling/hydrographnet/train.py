@@ -259,14 +259,15 @@ def main(cfg: DictConfig) -> None:
             epoch_loss += loss.item()
             num_batches += 1
 
+        physics_loss = loss_dict.get("physics_loss", torch.tensor(0.0)).detach().cpu()
         avg_loss = epoch_loss / num_batches if num_batches > 0 else float('inf')
-        rank_zero_logger.info(f"Epoch {epoch} completed. Average Loss: {avg_loss:.4e}")
+        rank_zero_logger.info(f"Epoch {epoch} completed. Average Loss: {avg_loss:.4f}. Physics Loss: {physics_loss:.4f}.")
 
         wandb.log({
             "total_loss": loss_dict["total_loss"].detach().cpu(),
             "loss_one": loss_dict.get("loss_one", torch.tensor(0.0)).detach().cpu(),
             "loss_stability": loss_dict.get("loss_stability", torch.tensor(0.0)).detach().cpu(),
-            "physics_loss": loss_dict.get("physics_loss", torch.tensor(0.0)).detach().cpu(),
+            "physics_loss": physics_loss,
             "epoch": epoch
         })
 
