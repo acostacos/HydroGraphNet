@@ -28,7 +28,7 @@ import zipfile
 import hashlib
 import logging
 from pathlib import Path
-from typing import Any, Optional, Union, List
+from typing import Any, Optional, Union, List, Tuple
 
 import requests
 import numpy as np
@@ -256,7 +256,7 @@ class HydroGraphDataset(DGLDataset):
         self.hydrograph_ids_file = hydrograph_ids_file
         self.split = split
         # rollout_length is only used when split=="test"
-        self.rollout_length = rollout_length if rollout_length is not None else 0
+        self.rollout_length = rollout_length
         self.return_physics = return_physics
 
         # Placeholders for static and dynamic data, indices, and normalization stats.
@@ -407,7 +407,8 @@ class HydroGraphDataset(DGLDataset):
         elif self.split == "test":
             for dyn in self.dynamic_data:
                 T = dyn["water_depth"].shape[0]
-                if T < self.n_time_steps + self.rollout_length:
+                rollout = self.rollout_length if self.rollout_length is not None else (T - self.n_time_steps)
+                if T < self.n_time_steps + rollout:
                     raise ValueError(
                         f"Hydrograph {dyn['hydro_id']} does not have enough time steps for the specified rollout_length."
                     )
@@ -543,19 +544,22 @@ class HydroGraphDataset(DGLDataset):
             g = dgl.graph((src, dst))
             g.edata["x"] = torch.tensor(sd["edge_features"], dtype=torch.float)
             g.ndata["x"] = torch.tensor(node_features, dtype=torch.float)
+            T = dyn["water_depth"].shape[0]
+            rollout = self.rollout_length if self.rollout_length is not None else (T - self.n_time_steps)
             rollout_data = {
                 "inflow": torch.tensor(
-                    dyn["inflow_hydrograph"][self.n_time_steps:self.n_time_steps + self.rollout_length],
+                    dyn["inflow_hydrograph"][self.n_time_steps:self.n_time_steps + rollout],
                     dtype=torch.float),
                 "precipitation": torch.tensor(
-                    dyn["precipitation"][self.n_time_steps:self.n_time_steps + self.rollout_length],
+                    dyn["precipitation"][self.n_time_steps:self.n_time_steps + rollout],
                     dtype=torch.float),
                 "water_depth_gt": torch.tensor(
-                    dyn["water_depth"][self.n_time_steps:self.n_time_steps + self.rollout_length],
+                    dyn["water_depth"][self.n_time_steps:self.n_time_steps + rollout],
                     dtype=torch.float),
                 "volume_gt": torch.tensor(
-                    dyn["volume"][self.n_time_steps:self.n_time_steps + self.rollout_length],
+                    dyn["volume"][self.n_time_steps:self.n_time_steps + rollout],
                     dtype=torch.float),
+                "area": torch.tensor(sd["area_denorm"], dtype=torch.float),
             }
             return g, rollout_data
 
@@ -760,7 +764,7 @@ class HydroGraphDataset(DGLDataset):
                              manning: np.ndarray, flow_accum: np.ndarray, infiltration: np.ndarray,
                              water_depth: np.ndarray, volume: np.ndarray,
                              precipitation_data: np.ndarray, time_step: int, n_time_steps: int,
-                             inflow_hydrograph: np.ndarray) -> (np.ndarray, float, float):
+                             inflow_hydrograph: np.ndarray) -> Tuple[np.ndarray, float, float]:
         """
         Create node features by combining static and dynamic data.
 

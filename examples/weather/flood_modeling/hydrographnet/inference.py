@@ -145,7 +145,7 @@ def main(cfg: DictConfig):
     loads the checkpoint using load_checkpoint, performs iterative rollout, and generates animations.
     """
     device = torch.device(cfg.get("device", "cuda") if torch.cuda.is_available() else "cpu")
-    rollout_length = cfg.get("num_test_time_steps", 10)  # Rollout length (number of future steps)
+    rollout_length = cfg.get("num_test_time_steps", None)  # Rollout length (number of future steps)
     n_time_steps = cfg.get("n_time_steps", 2)
     prefix = cfg.get("prefix", "M80")
     data_dir = cfg.get("test_dir")
@@ -193,6 +193,9 @@ def main(cfg: DictConfig):
     all_rmse_all = []
     logger = Logger()
 
+    CLIP_NEGATIVE_WATER_DEPTH = True
+    TARGET_VARIABLE = 'volume' # water_depth or volume
+
     # Loop over each test hydrograph.
     for idx in range(len(test_dataset)):
         g, rollout_data = test_dataset[idx]
@@ -211,11 +214,13 @@ def main(cfg: DictConfig):
         inflow_seq = rollout_data["inflow"].to(device)
         precip_seq = rollout_data["precipitation"].to(device)
         wd_gt_seq = rollout_data["water_depth_gt"].to(device)
+        volume_gt = rollout_data["volume_gt"].to(device)
 
         X_iter = X_current.clone()
 
         validation_stats.start_validate()
-        for t in range(rollout_length):
+        num_timesteps_rollout = rollout_length if rollout_length is not None else wd_gt_seq.shape[0]
+        for t in range(num_timesteps_rollout):
             # Split into static and dynamic parts.
             static_part = X_iter[:, :12]  # columns 0-11: static features (including flow/precip)
             water_depth_window = X_iter[:, 12:12 + n_time_steps]  # e.g., columns 12-13 for n_time_steps=2
@@ -244,26 +249,28 @@ def main(cfg: DictConfig):
             X_iter = torch.cat([static_part_updated, water_depth_updated, volume_updated], dim=1)
 
             # Save the predicted actual water depth.
-            rollout = new_wd.squeeze(1).detach().cpu()
-            ground_truth = wd_gt_seq[t].detach().cpu()
+            target_rollout = new_wd if TARGET_VARIABLE == 'water_depth' else new_vol
+            target_gt = wd_gt_seq[t] if TARGET_VARIABLE == 'water_depth' else volume_gt[t]
+            rollout = target_rollout.squeeze(1).detach().cpu()
+            ground_truth = target_gt.detach().cpu()
             rollout_preds.append(rollout)
             ground_truth_list.append(ground_truth)
 
-            CLIP_NEGATIVE_WATER_DEPTH = True
             if CLIP_NEGATIVE_WATER_DEPTH:
-                wd_mean = test_dataset.dynamic_stats["water_depth"]["mean"]
-                wd_std = test_dataset.dynamic_stats["water_depth"]["std"]
+                target_mean = test_dataset.dynamic_stats[TARGET_VARIABLE]["mean"]
+                target_std = test_dataset.dynamic_stats[TARGET_VARIABLE]["std"]
 
                 # Clip negative values for water depth
-                rollout = HydroGraphDataset.denormalize(rollout, wd_mean, wd_std)
+                rollout = HydroGraphDataset.denormalize(rollout, target_mean, target_std)
                 rollout = torch.clip(rollout, min=0)
 
-                ground_truth = HydroGraphDataset.denormalize(ground_truth, wd_mean, wd_std)
+                ground_truth = HydroGraphDataset.denormalize(ground_truth, target_mean, target_std)
                 ground_truth = torch.clip(ground_truth, min=0)
 
+            water_threshold = 0.05 if TARGET_VARIABLE == 'water_depth' else rollout_data['area']
             validation_stats.update_stats_for_epoch(rollout[:, None],
                                                     ground_truth[:, None],
-                                                    water_threshold=0.05)
+                                                    water_threshold=water_threshold)
 
             # Compute RMSE for this rollout step.
             rmse = torch.sqrt(torch.mean((new_wd.squeeze(1) - wd_gt_seq[t]) ** 2)).item()
@@ -277,7 +284,7 @@ def main(cfg: DictConfig):
 
         validation_stats.print_stats_summary()
 
-        metrics_filename = f"HydroGraphNet_{sample_id}_metrics.npz"
+        metrics_filename = f"HydroGraphNet_runid_{sample_id}_metrics.npz"
         metrics_path = os.path.join(metrics_output_dir, metrics_filename)
         validation_stats.save_stats(metrics_path)
 
