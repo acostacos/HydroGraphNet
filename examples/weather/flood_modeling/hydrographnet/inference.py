@@ -230,7 +230,8 @@ def main(cfg: DictConfig):
             X_input = torch.cat([static_part, water_depth_window, volume_window], dim=1)  # shape remains 16
 
             # Predict the differences (delta).
-            pred = model(X_input, edge_features, g)  # shape: (num_nodes, 2)
+            with torch.no_grad():
+                pred = model(X_input, edge_features, g)  # shape: (num_nodes, 2)
             new_wd = water_depth_window[:, -1:] + pred[:, 0:1]
             new_vol = volume_window[:, -1:] + pred[:, 1:2]
 
