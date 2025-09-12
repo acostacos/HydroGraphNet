@@ -138,7 +138,8 @@ def create_animation(rollout_predictions, ground_truth, initial_graph, rmse_list
     print(f"Animation saved to {output_path}")
 
 
-@hydra.main(version_base="1.3", config_path="conf", config_name="config")
+# @hydra.main(version_base="1.3", config_path="conf", config_name="config")
+@hydra.main(version_base="1.3", config_path="conf", config_name="hecras_config")
 def main(cfg: DictConfig):
     """
     Main function that loads the configuration, instantiates the test dataset and model,
@@ -167,7 +168,12 @@ def main(cfg: DictConfig):
         rollout_length=rollout_length,
         force_reload=False,
         verbose=True,
-        return_physics=False
+        return_physics=False,
+        # Personally added parameters
+        spin_up_timesteps=cfg.get("spin_up_timesteps", 72),
+        downsample_interval=cfg.get("downsample_interval", 1),
+        clip_using_water_volume=cfg.get("clip_using_water_volume", False),
+        ts_from_peak=cfg.get("ts_from_peak", None),
     )
     print(f"Loaded test dataset with {len(test_dataset)} hydrographs.")
 
@@ -194,6 +200,8 @@ def main(cfg: DictConfig):
     logger = Logger()
 
     CLIP_NEGATIVE_WATER_DEPTH = True
+    REMOVE_GHOST_NODES = True
+    START_GHOST_NODE_IDX = 1126 # for HEC-RAS dataset
     TARGET_VARIABLE = 'volume' # water_depth or volume
 
     # Loop over each test hydrograph.
@@ -268,7 +276,13 @@ def main(cfg: DictConfig):
                 ground_truth = HydroGraphDataset.denormalize(ground_truth, target_mean, target_std)
                 ground_truth = torch.clip(ground_truth, min=0)
 
-            water_threshold = 0.05 if TARGET_VARIABLE == 'water_depth' else rollout_data['area']
+            area = rollout_data['area']
+            if REMOVE_GHOST_NODES:
+                rollout = rollout[:START_GHOST_NODE_IDX]
+                ground_truth = ground_truth[:START_GHOST_NODE_IDX]
+                area = area[:START_GHOST_NODE_IDX]
+
+            water_threshold = 0.05 if TARGET_VARIABLE == 'water_depth' else area
             validation_stats.update_stats_for_epoch(rollout[:, None],
                                                     ground_truth[:, None],
                                                     water_threshold=water_threshold)

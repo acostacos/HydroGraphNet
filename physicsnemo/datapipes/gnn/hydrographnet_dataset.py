@@ -243,7 +243,12 @@ class HydroGraphDataset(DGLDataset):
                  prefix: str = "M80", num_samples: int = 500, n_time_steps: int = 10, k: int = 4,
                  noise_std: float = 0.01, noise_type: str = "none", hydrograph_ids_file: Optional[str] = None,
                  split: str = "train", rollout_length: Optional[int] = None, force_reload: bool = False,
-                 verbose: bool = False, return_physics: bool = False):
+                 verbose: bool = False, return_physics: bool = False,
+                 # Personally added parameters
+                 spin_up_timesteps: int = 72,
+                 downsample_interval: int = 1,
+                 clip_using_water_volume: bool = False,
+                 ts_from_peak: int = 24):
         # Initialize dataset attributes.
         self.data_dir = str(data_dir)
         ensure_data_available(self.data_dir)
@@ -258,6 +263,12 @@ class HydroGraphDataset(DGLDataset):
         # rollout_length is only used when split=="test"
         self.rollout_length = rollout_length
         self.return_physics = return_physics
+
+        # Personally added parameters
+        self.spin_up_timesteps = spin_up_timesteps
+        self.downsample_interval = downsample_interval
+        self.clip_using_water_volume = clip_using_water_volume
+        self.ts_from_peak = ts_from_peak
 
         # Placeholders for static and dynamic data, indices, and normalization stats.
         self.static_data = {}
@@ -341,7 +352,8 @@ class HydroGraphDataset(DGLDataset):
         inflow_list = []
         for hid in tqdm(self.hydrograph_ids, desc="Processing Hydrographs"):
             water_depth, inflow_hydrograph, volume, precipitation = self.load_dynamic_data(
-                self.data_dir, hid, self.prefix, num_points=num_nodes)
+                self.data_dir, hid, self.prefix, num_points=num_nodes,
+                skip=self.spin_up_timesteps, interval=self.downsample_interval)
             temp_dynamic_data.append({
                 "water_depth": water_depth,
                 "inflow_hydrograph": inflow_hydrograph,
@@ -530,15 +542,17 @@ class HydroGraphDataset(DGLDataset):
             else:
                 return g
         else:
+            start_idx = 0 if not self.clip_using_water_volume else 1 # Offset by 1 when using HEC-RAS dataset
+            end_idx = self.n_time_steps if not self.clip_using_water_volume else (self.n_time_steps + 1)
             # Test mode: Each sample returns a graph and a rollout data dictionary.
             dyn = self.dynamic_data[idx]
             node_features, _, _ = self.create_node_features(
                 sd["xy_coords"], sd["area"], sd["elevation"], sd["slope"], sd["aspect"],
                 sd["curvature"], sd["manning"], sd["flow_accum"], sd["infiltration"],
-                dyn["water_depth"][0:self.n_time_steps, :],
-                dyn["volume"][0:self.n_time_steps, :],
+                dyn["water_depth"][start_idx:end_idx, :],
+                dyn["volume"][start_idx:end_idx, :],
                 dyn["precipitation"],
-                0, self.n_time_steps, dyn["inflow_hydrograph"]
+                start_idx, self.n_time_steps, dyn["inflow_hydrograph"]
             )
             src, dst = sd["edge_index"]
             g = dgl.graph((src, dst))
@@ -548,16 +562,16 @@ class HydroGraphDataset(DGLDataset):
             rollout = self.rollout_length if self.rollout_length is not None else (T - self.n_time_steps)
             rollout_data = {
                 "inflow": torch.tensor(
-                    dyn["inflow_hydrograph"][self.n_time_steps:self.n_time_steps + rollout],
+                    dyn["inflow_hydrograph"][end_idx:end_idx + rollout],
                     dtype=torch.float),
                 "precipitation": torch.tensor(
-                    dyn["precipitation"][self.n_time_steps:self.n_time_steps + rollout],
+                    dyn["precipitation"][end_idx:end_idx + rollout],
                     dtype=torch.float),
                 "water_depth_gt": torch.tensor(
-                    dyn["water_depth"][self.n_time_steps:self.n_time_steps + rollout],
+                    dyn["water_depth"][end_idx:end_idx + rollout],
                     dtype=torch.float),
                 "volume_gt": torch.tensor(
-                    dyn["volume"][self.n_time_steps:self.n_time_steps + rollout],
+                    dyn["volume"][end_idx:end_idx + rollout],
                     dtype=torch.float),
                 "area": torch.tensor(sd["area_denorm"], dtype=torch.float),
             }
@@ -747,16 +761,33 @@ class HydroGraphDataset(DGLDataset):
         inflow_path = os.path.join(folder, f"{prefix}_US_InF_{hydrograph_id}.txt")
         volume_path = os.path.join(folder, f"{prefix}_V_{hydrograph_id}.txt")
         precipitation_path = os.path.join(folder, f"{prefix}_Pr_{hydrograph_id}.txt")
-        water_depth = np.loadtxt(wd_path, delimiter='\t')[skip::interval, :num_points]
-        inflow_hydrograph = np.loadtxt(inflow_path, delimiter='\t')[skip::interval, 1]
-        volume = np.loadtxt(volume_path, delimiter='\t')[skip::interval, :num_points]
-        precipitation = np.loadtxt(precipitation_path, delimiter='\t')[skip::interval]
-        # Limit data until 25 time steps after the peak inflow.
-        peak_time_idx = np.argmax(inflow_hydrograph)
-        water_depth = water_depth[:peak_time_idx + 25]
-        volume = volume[:peak_time_idx + 25]
-        precipitation = precipitation[:peak_time_idx + 25] * 2.7778e-7  # Unit conversion
-        inflow_hydrograph = inflow_hydrograph[:peak_time_idx + 25]
+        if self.clip_using_water_volume:
+            # HEC-RAS behavior
+            volume = np.loadtxt(volume_path, delimiter='\t')
+            total_water_volume = volume.sum(axis=1)
+            peak_idx = np.argmax(total_water_volume).item()
+            end_idx = peak_idx + self.ts_from_peak
+
+            water_depth = np.loadtxt(wd_path, delimiter='\t')[skip:end_idx:interval, :num_points]
+            inflow_hydrograph = np.loadtxt(inflow_path, delimiter='\t')[skip:end_idx:interval, 1]
+            precipitation = np.loadtxt(precipitation_path, delimiter='\t')[skip:end_idx:interval] * 2.7778e-7  # Unit conversion (mm/h to m/s)
+
+            volume = volume[skip:end_idx:interval, :num_points]
+            CLIP_VOLUME = 100000  # in cubic meters
+            volume = np.clip(volume, a_min=0, a_max=CLIP_VOLUME)
+        else:
+            # Default behavior
+            water_depth = np.loadtxt(wd_path, delimiter='\t')[skip::interval, :num_points]
+            inflow_hydrograph = np.loadtxt(inflow_path, delimiter='\t')[skip::interval, 1]
+            volume = np.loadtxt(volume_path, delimiter='\t')[skip::interval, :num_points]
+            precipitation = np.loadtxt(precipitation_path, delimiter='\t')[skip::interval]
+
+            # Limit data until 25 time steps after the peak inflow.
+            peak_time_idx = np.argmax(inflow_hydrograph)
+            water_depth = water_depth[:peak_time_idx + 25]
+            volume = volume[:peak_time_idx + 25]
+            precipitation = precipitation[:peak_time_idx + 25] * 2.7778e-7  # Unit conversion (mm/h to m/s)
+            inflow_hydrograph = inflow_hydrograph[:peak_time_idx + 25]
         return water_depth, inflow_hydrograph, volume, precipitation
 
     def create_node_features(self, xy_coords: np.ndarray, area: np.ndarray, elevation: np.ndarray,
