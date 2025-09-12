@@ -52,13 +52,6 @@ def get_water_depth(hec_ras_path: str, nodes_shp_path: str):
     water_depth = np.clip(water_level - elevation, a_min=0, a_max=None)
     return water_depth
 
-def get_clipped_water_volume(hec_ras_path: str):
-    """Remove exterme values in water volume"""
-    CLIP_VOLUME = 100000  # in cubic meters
-    water_volume = get_water_volume(hec_ras_path)
-    water_volume = np.clip(water_volume, a_min=0, a_max=CLIP_VOLUME)
-    return water_volume
-
 def get_inflow(hec_ras_path: str, edges_shp_path: str, inflow_boundary_nodes: list[int]):
     """Get inflow at boundary nodes"""
     face_flow = get_face_flow(hec_ras_path)
@@ -126,7 +119,7 @@ def create_dynamic_text_files(hec_ras_filepath: str, node_shp_filepath: str, edg
     water_depth_path = os.path.join(dataset_folder, f"{prefix}_WD_{hydrograph_id}.txt")
     np.savetxt(water_depth_path, water_depth, delimiter='\t')
 
-    volume = get_clipped_water_volume(hec_ras_filepath)
+    volume = get_water_volume(hec_ras_filepath)
     volume_path = os.path.join(dataset_folder, f"{prefix}_V_{hydrograph_id}.txt")
     np.savetxt(volume_path, volume, delimiter='\t')
 
