@@ -4,7 +4,7 @@ import yaml
 import pandas as pd
 
 from transform_helper_files.hecras_data_retrieval import get_cell_area, get_water_level, get_roughness, get_cumulative_rainfall, get_water_volume, get_face_flow
-from transform_helper_files.shp_data_retrieval import get_cell_position, get_cell_elevation
+from transform_helper_files.shp_data_retrieval import get_cell_position, get_cell_elevation, get_edge_index
 from transform_helper_files.dem_feature_extraction import get_filled_dem, get_slope, get_aspect, get_curvature, get_flow_accumulation
 
 def get_info_from_config(config_file_path: str, root_dir: str) -> dict:
@@ -59,11 +59,20 @@ def get_clipped_water_volume(hec_ras_path: str):
     water_volume = np.clip(water_volume, a_min=0, a_max=CLIP_VOLUME)
     return water_volume
 
-def get_inflow(hec_ras_path: str, inflow_boundary_nodes: list[int]):
+def get_inflow(hec_ras_path: str, edges_shp_path: str, inflow_boundary_nodes: list[int]):
     """Get inflow at boundary nodes"""
     face_flow = get_face_flow(hec_ras_path)
-    inflow = face_flow[:, inflow_boundary_nodes].sum(axis=1)
-    return inflow
+    edge_index = get_edge_index(edges_shp_path)
+    inflow_to_boundary_mask = np.isin(edge_index[1], inflow_boundary_nodes)
+    if np.any(inflow_to_boundary_mask):
+        # Flip the dynamic edge features accordingly
+        face_flow[:, inflow_to_boundary_mask] *= -1
+
+    inflow_edges_mask = np.any(np.isin(edge_index, inflow_boundary_nodes), axis=0)
+    inflow = face_flow[:, inflow_edges_mask].sum(axis=1)
+
+    out = np.stack([np.zeros(inflow.shape[0]), inflow]).T  # Shape (num_timesteps, 2)
+    return out
 
 def get_interval_rainfall(hec_ras_path: str):
     """Get interval rainfall from cumulative rainfall"""
@@ -112,7 +121,7 @@ def create_constant_text_files(hec_ras_filepath: str, node_shp_filepath: str, de
     infiltration_path = os.path.join(dataset_folder, f"{prefix}_IP.txt")
     np.savetxt(infiltration_path, infiltration, delimiter='\t')
 
-def create_dynamic_text_files(hec_ras_filepath: str, node_shp_filepath: str, inflow_boundary_nodes: list[int], dataset_folder: str, prefix: str, hydrograph_id: str):
+def create_dynamic_text_files(hec_ras_filepath: str, node_shp_filepath: str, edge_shp_filepath: str, inflow_boundary_nodes: list[int], dataset_folder: str, prefix: str, hydrograph_id: str):
     water_depth = get_water_depth(hec_ras_filepath, node_shp_filepath)
     water_depth_path = os.path.join(dataset_folder, f"{prefix}_WD_{hydrograph_id}.txt")
     np.savetxt(water_depth_path, water_depth, delimiter='\t')
@@ -121,7 +130,7 @@ def create_dynamic_text_files(hec_ras_filepath: str, node_shp_filepath: str, inf
     volume_path = os.path.join(dataset_folder, f"{prefix}_V_{hydrograph_id}.txt")
     np.savetxt(volume_path, volume, delimiter='\t')
 
-    inflow = get_inflow(hec_ras_filepath, inflow_boundary_nodes)
+    inflow = get_inflow(hec_ras_filepath, edge_shp_filepath, inflow_boundary_nodes)
     inflow_path = os.path.join(dataset_folder, f"{prefix}_US_InF_{hydrograph_id}.txt")
     np.savetxt(inflow_path, inflow, delimiter='\t')
 
@@ -165,6 +174,7 @@ def main():
         print(f"Saving dynamic features for event {event_key}...", flush=True)
         create_dynamic_text_files(hec_ras_file_path,
                                   info['nodes_shp_path'],
+                                  info['edges_shp_path'],
                                   info['inflow_boundary_nodes'],
                                   base_dataset_folder,
                                   prefix,
