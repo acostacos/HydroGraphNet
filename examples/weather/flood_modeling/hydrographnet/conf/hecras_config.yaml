@@ -28,10 +28,8 @@ num_output_features: 2    # Number of output features (e.g., depth and volume di
 num_edge_features: 3      # Number of edge features.
 train_ids_file: 'train.txt'
 test_ids_file: 'test.txt'
-spin_up_timesteps: 864
-downsample_interval: 3
-clip_using_water_volume: True
-ts_from_peak: 24
+spin_up_timesteps: 0
+trim_from_peak_inflow: False
 
 # Noise settings.
 noise_type: "pushforward"        # Options: "none", "pushforward", "only_last", "correlated", etc.

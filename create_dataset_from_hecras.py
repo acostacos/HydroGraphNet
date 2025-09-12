@@ -52,6 +52,13 @@ def get_water_depth(hec_ras_path: str, nodes_shp_path: str):
     water_depth = np.clip(water_level - elevation, a_min=0, a_max=None)
     return water_depth
 
+def get_clipped_water_volume(hec_ras_path: str):
+    """Remove exterme values in water volume"""
+    CLIP_VOLUME = 100000  # in cubic meters
+    water_volume = get_water_volume(hec_ras_path)
+    water_volume = np.clip(water_volume, a_min=0, a_max=CLIP_VOLUME)
+    return water_volume
+
 def get_inflow(hec_ras_path: str, edges_shp_path: str, inflow_boundary_nodes: list[int]):
     """Get inflow at boundary nodes"""
     face_flow = get_face_flow(hec_ras_path)
@@ -114,20 +121,38 @@ def create_constant_text_files(hec_ras_filepath: str, node_shp_filepath: str, de
     infiltration_path = os.path.join(dataset_folder, f"{prefix}_IP.txt")
     np.savetxt(infiltration_path, infiltration, delimiter='\t')
 
-def create_dynamic_text_files(hec_ras_filepath: str, node_shp_filepath: str, edge_shp_filepath: str, inflow_boundary_nodes: list[int], dataset_folder: str, prefix: str, hydrograph_id: str):
+def create_dynamic_text_files(hec_ras_filepath: str,
+                              node_shp_filepath: str,
+                              edge_shp_filepath: str,
+                              inflow_boundary_nodes: list[int],
+                              dataset_folder: str,
+                              prefix: str,
+                              hydrograph_id: str,
+                              spin_up_timesteps: int = 0,
+                              ts_from_peak_water_volume: int = None,
+                              downsample_interval: int = 1):
+    volume = get_water_volume(hec_ras_filepath)
+    total_water_volume = volume.sum(axis=1)
+    peak_idx = np.argmax(total_water_volume).item()
+    end_idx = peak_idx + ts_from_peak_water_volume
+
     water_depth = get_water_depth(hec_ras_filepath, node_shp_filepath)
+    water_depth = water_depth[spin_up_timesteps:end_idx:downsample_interval]
     water_depth_path = os.path.join(dataset_folder, f"{prefix}_WD_{hydrograph_id}.txt")
     np.savetxt(water_depth_path, water_depth, delimiter='\t')
 
-    volume = get_water_volume(hec_ras_filepath)
+    volume = get_clipped_water_volume(hec_ras_filepath)
+    volume = volume[spin_up_timesteps:end_idx:downsample_interval]
     volume_path = os.path.join(dataset_folder, f"{prefix}_V_{hydrograph_id}.txt")
     np.savetxt(volume_path, volume, delimiter='\t')
 
     inflow = get_inflow(hec_ras_filepath, edge_shp_filepath, inflow_boundary_nodes)
+    inflow = inflow[spin_up_timesteps:end_idx:downsample_interval]
     inflow_path = os.path.join(dataset_folder, f"{prefix}_US_InF_{hydrograph_id}.txt")
     np.savetxt(inflow_path, inflow, delimiter='\t')
 
     precipitation = get_interval_rainfall(hec_ras_filepath)
+    precipitation = precipitation[spin_up_timesteps:end_idx:downsample_interval]
     precipitation_path = os.path.join(dataset_folder, f"{prefix}_Pr_{hydrograph_id}.txt")
     np.savetxt(precipitation_path, precipitation, delimiter='\t')
 
@@ -137,6 +162,9 @@ def main():
     dem_path = ""
     base_dataset_folder = f"outputs_phy/hecras_data"
     prefix = "M80"
+    spin_up_timesteps = 864
+    ts_from_peak_water_volume = 24 # Set to None to disable
+    downsample_interval = 3
 
     # Get important paths
     info = get_info_from_config(config_file_path, root_dir)
@@ -171,7 +199,10 @@ def main():
                                   info['inflow_boundary_nodes'],
                                   base_dataset_folder,
                                   prefix,
-                                  hydrograph_id=event_key)
+                                  hydrograph_id=event_key,
+                                  spin_up_timesteps=spin_up_timesteps,
+                                  ts_from_peak_water_volume=ts_from_peak_water_volume,
+                                  downsample_interval=downsample_interval)
 
 if __name__ == "__main__":
     main()

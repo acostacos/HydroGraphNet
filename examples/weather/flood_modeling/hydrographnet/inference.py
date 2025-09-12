@@ -171,9 +171,7 @@ def main(cfg: DictConfig):
         return_physics=False,
         # Personally added parameters
         spin_up_timesteps=cfg.get("spin_up_timesteps", 72),
-        downsample_interval=cfg.get("downsample_interval", 1),
-        clip_using_water_volume=cfg.get("clip_using_water_volume", False),
-        ts_from_peak=cfg.get("ts_from_peak", None),
+        trim_from_peak_inflow=cfg.get("trim_from_peak_inflow", True),
     )
     print(f"Loaded test dataset with {len(test_dataset)} hydrographs.")
 
