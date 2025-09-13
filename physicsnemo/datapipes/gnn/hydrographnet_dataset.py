@@ -34,6 +34,7 @@ import requests
 import numpy as np
 from tqdm import tqdm
 from scipy.spatial import KDTree
+from transform_helper_files.shp_data_retrieval import get_edge_index
 
 import torch
 import dgl
@@ -247,7 +248,8 @@ class HydroGraphDataset(DGLDataset):
                  # Personally added parameters
                  spin_up_timesteps: int = 72,
                  trim_from_peak_inflow: bool = True,
-                 num_nodes_to_include: Optional[int] = None) -> None:
+                 num_nodes_to_include: Optional[int] = None,
+                 links_shp_filepath: Optional[str] = None) -> None:
         # Initialize dataset attributes.
         self.data_dir = str(data_dir)
         ensure_data_available(self.data_dir)
@@ -267,6 +269,7 @@ class HydroGraphDataset(DGLDataset):
         self.spin_up_timesteps = spin_up_timesteps
         self.trim_from_peak_inflow = trim_from_peak_inflow
         self.num_nodes_to_include = num_nodes_to_include
+        self.links_shp_filepath = links_shp_filepath
 
         # Placeholders for static and dynamic data, indices, and normalization stats.
         self.static_data = {}
@@ -303,8 +306,12 @@ class HydroGraphDataset(DGLDataset):
         num_nodes = xy_coords.shape[0]
         kdtree = KDTree(xy_coords)
         _, neighbors = kdtree.query(xy_coords, k=self.k + 1)
-        edge_index = np.vstack([(i, nbr) for i, nbrs in enumerate(neighbors)
-                                  for nbr in nbrs if nbr != i]).T
+        if self.links_shp_filepath is not None:
+            edge_index = get_edge_index(self.links_shp_filepath)
+        else:
+            # Default behavior
+            edge_index = np.vstack([(i, nbr) for i, nbrs in enumerate(neighbors)
+                                    for nbr in nbrs if nbr != i]).T
         edge_features = self.create_edge_features(xy_coords, edge_index)
 
         # Store static data.
@@ -721,7 +728,8 @@ class HydroGraphDataset(DGLDataset):
         flow_accum_path = os.path.join(folder, f"{prefix}_FA.txt")
         infiltration_path = os.path.join(folder, f"{prefix}_IP.txt")
 
-        xy_coords = np.loadtxt(xy_path, delimiter='\t')[:num_nodes_to_include]
+        end_nodes = num_nodes_to_include + 1 if num_nodes_to_include is not None else None
+        xy_coords = np.loadtxt(xy_path, delimiter='\t')[:end_nodes]
         xy_coords = standardize(xy_coords, "xy_coords")
         area_denorm = np.loadtxt(ca_path, delimiter='\t')[:xy_coords.shape[0]].reshape(-1, 1)
         area = standardize(area_denorm, "area")

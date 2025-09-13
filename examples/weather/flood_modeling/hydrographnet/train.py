@@ -78,6 +78,7 @@ class MGNTrainer:
             spin_up_timesteps=cfg.get("spin_up_timesteps", 72),
             trim_from_peak_inflow=cfg.get("trim_from_peak_inflow", True),
             num_nodes_to_include=cfg.get("num_nodes_to_include", None),
+            links_shp_filepath=cfg.get("links_shp_filepath", None),
         )
         self.dataloader = GraphDataLoader(
             dataset,

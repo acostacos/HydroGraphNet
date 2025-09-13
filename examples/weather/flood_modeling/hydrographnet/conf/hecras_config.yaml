@@ -31,7 +31,8 @@ test_ids_file: 'test.txt'
 
 spin_up_timesteps: 0
 trim_from_peak_inflow: False
-num_nodes_to_include: 1126
+num_nodes_to_include: null
+links_shp_filepath: null  # Path to shapefile for river links; set to null if not used.
 
 # Noise settings.
 noise_type: "pushforward"        # Options: "none", "pushforward", "only_last", "correlated", etc.
