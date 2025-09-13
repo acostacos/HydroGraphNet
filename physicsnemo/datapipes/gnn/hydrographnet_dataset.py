@@ -246,7 +246,8 @@ class HydroGraphDataset(DGLDataset):
                  verbose: bool = False, return_physics: bool = False,
                  # Personally added parameters
                  spin_up_timesteps: int = 72,
-                 trim_from_peak_inflow: bool = True):
+                 trim_from_peak_inflow: bool = True,
+                 num_nodes_to_include: Optional[int] = None) -> None:
         # Initialize dataset attributes.
         self.data_dir = str(data_dir)
         ensure_data_available(self.data_dir)
@@ -265,6 +266,7 @@ class HydroGraphDataset(DGLDataset):
         # Personally added parameters
         self.spin_up_timesteps = spin_up_timesteps
         self.trim_from_peak_inflow = trim_from_peak_inflow
+        self.num_nodes_to_include = num_nodes_to_include
 
         # Placeholders for static and dynamic data, indices, and normalization stats.
         self.static_data = {}
@@ -286,14 +288,16 @@ class HydroGraphDataset(DGLDataset):
             # For training, load constant data and compute static normalization stats.
             (xy_coords, area, area_denorm, elevation, slope, aspect, curvature,
              manning, flow_accum, infiltration, self.static_stats) = self.load_constant_data(
-                self.data_dir, self.prefix, norm_stats_static=None)
+                self.data_dir, self.prefix, norm_stats_static=None,
+                num_nodes_to_include=self.num_nodes_to_include)
             self.save_norm_stats(self.static_stats, STATIC_NORM_STATS_FILE)
         else:
             # For test or validation, load precomputed normalization stats.
             self.static_stats = self.load_norm_stats(STATIC_NORM_STATS_FILE)
             (xy_coords, area, area_denorm, elevation, slope, aspect, curvature,
              manning, flow_accum, infiltration, _) = self.load_constant_data(
-                self.data_dir, self.prefix, norm_stats_static=self.static_stats)
+                self.data_dir, self.prefix, norm_stats_static=self.static_stats,
+                num_nodes_to_include=self.num_nodes_to_include)
 
         # Build the graph connectivity using a k-d tree.
         num_nodes = xy_coords.shape[0]
@@ -677,7 +681,8 @@ class HydroGraphDataset(DGLDataset):
         return stats
 
     def load_constant_data(self, folder: str, prefix: str,
-                           norm_stats_static: Optional[dict] = None):
+                           norm_stats_static: Optional[dict] = None,
+                           num_nodes_to_include: Optional[int] = None):
         """
         Load and standardize static (constant) data such as coordinates, elevation, and flow accumulation.
 
@@ -716,7 +721,7 @@ class HydroGraphDataset(DGLDataset):
         flow_accum_path = os.path.join(folder, f"{prefix}_FA.txt")
         infiltration_path = os.path.join(folder, f"{prefix}_IP.txt")
 
-        xy_coords = np.loadtxt(xy_path, delimiter='\t')
+        xy_coords = np.loadtxt(xy_path, delimiter='\t')[:num_nodes_to_include]
         xy_coords = standardize(xy_coords, "xy_coords")
         area_denorm = np.loadtxt(ca_path, delimiter='\t')[:xy_coords.shape[0]].reshape(-1, 1)
         area = standardize(area_denorm, "area")

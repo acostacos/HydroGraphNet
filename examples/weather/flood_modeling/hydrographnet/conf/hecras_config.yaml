@@ -28,8 +28,10 @@ num_output_features: 2    # Number of output features (e.g., depth and volume di
 num_edge_features: 3      # Number of edge features.
 train_ids_file: 'train.txt'
 test_ids_file: 'test.txt'
+
 spin_up_timesteps: 0
 trim_from_peak_inflow: False
+num_nodes_to_include: 1126
 
 # Noise settings.
 noise_type: "pushforward"        # Options: "none", "pushforward", "only_last", "correlated", etc.
