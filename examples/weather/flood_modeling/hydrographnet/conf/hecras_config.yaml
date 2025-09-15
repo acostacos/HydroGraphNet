@@ -23,9 +23,9 @@ num_training_time_steps: 300
 lr: 0.0001
 lr_decay_rate: 0.9999979
 weight_decay: 0.0001
-num_input_features: 16    # Number of node input features.
+num_input_features: 9    # Number of node input features.
 num_output_features: 2    # Number of output features (e.g., depth and volume differences).
-num_edge_features: 3      # Number of edge features.
+num_edge_features: 1      # Number of edge features.
 train_ids_file: 'train.txt'
 test_ids_file: 'test.txt'
 
@@ -35,11 +35,11 @@ num_nodes_to_include: null
 links_shp_filepath: null  # Path to shapefile for river links; set to null if not used.
 
 # Noise settings.
-noise_type: "pushforward"        # Options: "none", "pushforward", "only_last", "correlated", etc.
+noise_type: "none"        # Options: "none", "pushforward", "only_last", "correlated", etc.
 n_time_steps: 2           # Number of time steps in the sliding window.
 
 # Physics loss settings.
-use_physics_loss: true
+use_physics_loss: false
 delta_t: 900.0
 physics_loss_weight: 1.0
 
