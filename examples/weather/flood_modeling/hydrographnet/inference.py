@@ -197,7 +197,8 @@ def main(cfg: DictConfig):
     model.eval()
 
     all_rmse_all = []
-    logger = Logger()
+    log_file_path = os.path.join(metrics_output_dir, "inference_log.txt")
+    logger = Logger(log_file_path)
 
     CLIP_NEGATIVE_WATER_DEPTH = True
     REMOVE_GHOST_NODES = True
@@ -230,9 +231,9 @@ def main(cfg: DictConfig):
         num_timesteps_rollout = rollout_length if rollout_length is not None else wd_gt_seq.shape[0]
         for t in range(num_timesteps_rollout):
             # Split into static and dynamic parts.
-            static_part = X_iter[:, :12]  # columns 0-11: static features (including flow/precip)
-            water_depth_window = X_iter[:, 12:12 + n_time_steps]  # e.g., columns 12-13 for n_time_steps=2
-            volume_window = X_iter[:, 12 + n_time_steps:12 + 2 * n_time_steps]  # e.g., columns 14-15
+            static_part = X_iter[:, :10]  # columns 0-11: static features (including flow/precip)
+            water_depth_window = X_iter[:, 10:10 + n_time_steps]  # e.g., columns 12-13 for n_time_steps=2
+            volume_window = X_iter[:, 10 + n_time_steps:10 + 2 * n_time_steps]  # e.g., columns 14-15
 
             # Use the full dynamic window as input.
             X_input = torch.cat([static_part, water_depth_window, volume_window], dim=1)  # shape remains 16
@@ -252,7 +253,7 @@ def main(cfg: DictConfig):
             new_flow = inflow_seq[t].unsqueeze(0).expand(num_nodes, 1)
             new_precip = precip_seq[t].unsqueeze(0).expand(num_nodes, 1)
             static_part_updated = static_part.clone()
-            static_part_updated[:, 10:12] = torch.cat([new_flow, new_precip], dim=1)
+            static_part_updated[:, 8:10] = torch.cat([new_flow, new_precip], dim=1)
 
             # Form updated X_iter.
             X_iter = torch.cat([static_part_updated, water_depth_updated, volume_updated], dim=1)

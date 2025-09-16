@@ -829,7 +829,7 @@ class HydroGraphDataset(DGLDataset):
         precip_current_step = np.full((num_nodes, 1), precipitation_data[time_step])
         # Concatenate all features horizontally.
         features = np.hstack([
-            # xy_coords,
+            xy_coords,
             area,
             elevation,
             slope,
@@ -866,7 +866,7 @@ class HydroGraphDataset(DGLDataset):
         relative_coords = (relative_coords - np.mean(relative_coords, axis=0)) / (np.std(relative_coords, axis=0) + epsilon)
         distance = (distance - np.mean(distance)) / (np.std(distance) + epsilon)
         return np.hstack([
-            # relative_coords,
+            relative_coords,
             distance[:, None]
         ])
 
