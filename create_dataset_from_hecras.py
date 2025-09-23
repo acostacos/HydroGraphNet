@@ -45,6 +45,31 @@ def create_hydrograph_id_file(run_ids: list[str], dataset_folder: str, filename:
 def get_cell_infiltration(num_nodes: int):
     return np.zeros(num_nodes)
 
+def downsample_dynamic_data(dynamic_data: np.ndarray, step: int, aggr: str = 'first') -> np.ndarray:
+    if step == 1:
+        return dynamic_data
+
+    # Trim array to be divisible by step
+    trimmed_length = (dynamic_data.shape[0] // step) * step
+    trimmed_array = dynamic_data[:trimmed_length]
+
+    if aggr == 'first':
+        return trimmed_array[::step]
+
+    elif aggr in ['mean', 'sum']:
+        # Reshape to group consecutive elements
+        if dynamic_data.ndim == 1:
+            reshaped = trimmed_array.reshape(-1, step) # (timesteps, step)
+        else:
+            reshaped = trimmed_array.reshape(-1, step, dynamic_data.shape[1]) # (timesteps, step, feature)
+
+        if aggr == 'mean':
+            return np.mean(reshaped, axis=1)
+        elif aggr == 'sum':
+            return np.sum(reshaped, axis=1)
+
+    raise ValueError(f"Aggregation method '{aggr}' is not supported")
+
 def get_water_depth(hec_ras_path: str, nodes_shp_path: str):
     """Get water depth from water level and elevation"""
     water_level = get_water_level(hec_ras_path)
@@ -137,22 +162,26 @@ def create_dynamic_text_files(hec_ras_filepath: str,
     end_idx = peak_idx + ts_from_peak_water_volume
 
     water_depth = get_water_depth(hec_ras_filepath, node_shp_filepath)
-    water_depth = water_depth[spin_up_timesteps:end_idx:downsample_interval]
+    water_depth = water_depth[spin_up_timesteps:end_idx]
+    water_depth = downsample_dynamic_data(water_depth, downsample_interval, aggr='mean')
     water_depth_path = os.path.join(dataset_folder, f"{prefix}_WD_{hydrograph_id}.txt")
     np.savetxt(water_depth_path, water_depth, delimiter='\t')
 
     volume = get_clipped_water_volume(hec_ras_filepath)
-    volume = volume[spin_up_timesteps:end_idx:downsample_interval]
+    volume = volume[spin_up_timesteps:end_idx]
+    volume = downsample_dynamic_data(volume, downsample_interval, aggr='mean')
     volume_path = os.path.join(dataset_folder, f"{prefix}_V_{hydrograph_id}.txt")
     np.savetxt(volume_path, volume, delimiter='\t')
 
     inflow = get_inflow(hec_ras_filepath, edge_shp_filepath, inflow_boundary_nodes)
-    inflow = inflow[spin_up_timesteps:end_idx:downsample_interval]
+    inflow = inflow[spin_up_timesteps:end_idx]
+    inflow = downsample_dynamic_data(inflow, downsample_interval, aggr='mean')
     inflow_path = os.path.join(dataset_folder, f"{prefix}_US_InF_{hydrograph_id}.txt")
     np.savetxt(inflow_path, inflow, delimiter='\t')
 
     precipitation = get_interval_rainfall(hec_ras_filepath)
-    precipitation = precipitation[spin_up_timesteps:end_idx:downsample_interval]
+    precipitation = precipitation[spin_up_timesteps:end_idx]
+    precipitation = downsample_dynamic_data(precipitation, downsample_interval, aggr='sum')
     precipitation_path = os.path.join(dataset_folder, f"{prefix}_Pr_{hydrograph_id}.txt")
     np.savetxt(precipitation_path, precipitation, delimiter='\t')
 
