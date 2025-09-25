@@ -17,6 +17,7 @@ def get_info_from_config(config_file_path: str, root_dir: str) -> dict:
     train_summary_path = os.path.join(root_dir, 'raw', dataset_config['training']['dataset_summary_file'])
     test_summary_path = os.path.join(root_dir, 'raw', dataset_config['testing']['dataset_summary_file'])
     inflow_boundary_nodes = dataset_config['inflow_boundary_nodes']
+    outflow_boundary_nodes = dataset_config['outflow_boundary_nodes']
 
     return {
         'nodes_shp_path': nodes_shp_path,
@@ -24,6 +25,7 @@ def get_info_from_config(config_file_path: str, root_dir: str) -> dict:
         'train_summary_path': train_summary_path,
         'test_summary_path': test_summary_path,
         'inflow_boundary_nodes': inflow_boundary_nodes,
+        'outflow_boundary_nodes': outflow_boundary_nodes,
     }
 
 def get_hec_ras_paths_from_summary(summary_path: str, root_dir: str) -> dict:
@@ -99,13 +101,28 @@ def get_inflow(hec_ras_path: str, edges_shp_path: str, inflow_boundary_nodes: li
     out = np.stack([np.zeros(inflow.shape[0]), inflow]).T  # Shape (num_timesteps, 2)
     return out
 
+def get_outflow(hec_ras_path: str, edges_shp_path: str, outflow_boundary_nodes: list[int]):
+    """Get outflow at boundary nodes"""
+    face_flow = get_face_flow(hec_ras_path)
+    edge_index = get_edge_index(edges_shp_path)
+    outflow_from_boundary_mask = np.isin(edge_index[0], outflow_boundary_nodes)
+    if np.any(outflow_from_boundary_mask):
+        # Flip the dynamic edge features accordingly
+        face_flow[:, outflow_from_boundary_mask] *= -1
+
+    outflow_edges_mask = np.any(np.isin(edge_index, outflow_boundary_nodes), axis=0)
+    outflow = face_flow[:, outflow_edges_mask].sum(axis=1)
+
+    out = np.stack([np.zeros(outflow.shape[0]), outflow]).T  # Shape (num_timesteps, 2)
+    return out
+
 def get_interval_rainfall(hec_ras_path: str):
     """Get interval rainfall from cumulative rainfall"""
     cumulative_rainfall = get_cumulative_rainfall(hec_ras_path)
     last_ts_rainfall = np.zeros((1, cumulative_rainfall.shape[1]), dtype=cumulative_rainfall.dtype)
     intervals = np.diff(cumulative_rainfall, axis=0)
     interval_rainfall = np.concatenate((intervals, last_ts_rainfall), axis=0)
-    return interval_rainfall.sum(axis=1)
+    return interval_rainfall
 
 def create_constant_text_files(hec_ras_filepath: str, node_shp_filepath: str, dem_path: str, dataset_folder: str, prefix: str):
     pos = get_cell_position(node_shp_filepath)
@@ -150,6 +167,7 @@ def create_dynamic_text_files(hec_ras_filepath: str,
                               node_shp_filepath: str,
                               edge_shp_filepath: str,
                               inflow_boundary_nodes: list[int],
+                              outflow_boundary_nodes: list[int],
                               dataset_folder: str,
                               prefix: str,
                               hydrograph_id: str,
@@ -179,11 +197,25 @@ def create_dynamic_text_files(hec_ras_filepath: str,
     inflow_path = os.path.join(dataset_folder, f"{prefix}_US_InF_{hydrograph_id}.txt")
     np.savetxt(inflow_path, inflow, delimiter='\t')
 
-    precipitation = get_interval_rainfall(hec_ras_filepath)
-    precipitation = precipitation[spin_up_timesteps:end_idx]
-    precipitation = downsample_dynamic_data(precipitation, downsample_interval, aggr='sum')
+    outflow = get_outflow(hec_ras_filepath, edge_shp_filepath, outflow_boundary_nodes)
+    outflow = outflow[spin_up_timesteps:end_idx]
+    outflow = downsample_dynamic_data(outflow, downsample_interval, aggr='mean')
+    outflow_path = os.path.join(dataset_folder, f"{prefix}_DS_OutF_{hydrograph_id}.txt")
+    np.savetxt(outflow_path, outflow, delimiter='\t')
+
+    interval_rainfall = get_interval_rainfall(hec_ras_filepath)
+    interval_rainfall = interval_rainfall[spin_up_timesteps:end_idx]
+    interval_rainfall = downsample_dynamic_data(interval_rainfall, downsample_interval, aggr='sum')
+
+    precipitation = interval_rainfall.sum(axis=1)  # Sum across all cells to get total rainfall at each timestep
     precipitation_path = os.path.join(dataset_folder, f"{prefix}_Pr_{hydrograph_id}.txt")
     np.savetxt(precipitation_path, precipitation, delimiter='\t')
+
+    area = get_cell_area(hec_ras_filepath)
+    vol_interval_rainfall = (interval_rainfall / 1000) * area  # Convert mm to m³
+    vol_precipitation = vol_interval_rainfall.sum(axis=1)  # Sum across all cells to get total rainfall volume at each timestep
+    vol_precipitation_path = os.path.join(dataset_folder, f"{prefix}_PrVol_{hydrograph_id}.txt")
+    np.savetxt(vol_precipitation_path, vol_precipitation, delimiter='\t')
 
 def main():
     root_dir = ""
@@ -226,6 +258,7 @@ def main():
                                   info['nodes_shp_path'],
                                   info['edges_shp_path'],
                                   info['inflow_boundary_nodes'],
+                                  info['outflow_boundary_nodes'],
                                   base_dataset_folder,
                                   prefix,
                                   hydrograph_id=event_key,

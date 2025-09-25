@@ -154,6 +154,7 @@ def main(cfg: DictConfig):
     ckpt_path = cfg.get("ckpt_path")
     metrics_output_dir = cfg.get("metrics_output_dir", "metrics")
     anim_output_dir = cfg.get("animation_output_dir", "animations")
+    delta_t = cfg.get("delta_t", 1200.0)
     os.makedirs(anim_output_dir, exist_ok=True)
 
     print("Configuration:\n", OmegaConf.to_yaml(cfg))
@@ -197,12 +198,14 @@ def main(cfg: DictConfig):
     model.eval()
 
     all_rmse_all = []
-    logger = Logger()
+    log_file_path = os.path.join(metrics_output_dir, "inference.txt")
+    logger = Logger(log_file_path)
 
     CLIP_NEGATIVE_WATER_DEPTH = True
     REMOVE_GHOST_NODES = True
     START_GHOST_NODE_IDX = 1126 # for HEC-RAS dataset
     TARGET_VARIABLE = 'volume' # water_depth or volume
+    INCLUDE_GLOBAL_PHYSICS_LOSS = True
 
     # Loop over each test hydrograph.
     for idx in range(len(test_dataset)):
@@ -212,7 +215,7 @@ def main(cfg: DictConfig):
         X_current = g.ndata["x"].to(device)  # Expected shape: [num_nodes, 16]
         num_nodes = X_current.size(0)
 
-        validation_stats = ValidationStats(logger=logger)
+        validation_stats = ValidationStats(logger=logger, delta_t=delta_t)
         rollout_preds = []       # To store predicted actual water depth values for each step.
         ground_truth_list = []   # To store ground truth water depth values.
         rmse_list = []           # RMSE at each rollout step.
@@ -223,6 +226,11 @@ def main(cfg: DictConfig):
         precip_seq = rollout_data["precipitation"].to(device)
         wd_gt_seq = rollout_data["water_depth_gt"].to(device)
         volume_gt = rollout_data["volume_gt"].to(device)
+
+        if rollout_data["outflow"] is not None:
+            outflow_seq = rollout_data["outflow"].to(device)
+        if rollout_data["vol_precipitation"] is not None:
+            vol_precipitation_seq = rollout_data["vol_precipitation"].to(device)
 
         X_iter = X_current.clone()
 
@@ -260,8 +268,8 @@ def main(cfg: DictConfig):
             # Save the predicted actual water depth.
             target_rollout = new_wd if TARGET_VARIABLE == 'water_depth' else new_vol
             target_gt = wd_gt_seq[t] if TARGET_VARIABLE == 'water_depth' else volume_gt[t]
-            rollout = target_rollout.squeeze(1).detach().cpu()
-            ground_truth = target_gt.detach().cpu()
+            rollout = target_rollout.clone().squeeze(1).detach().cpu()
+            ground_truth = target_gt.clone().detach().cpu()
             rollout_preds.append(rollout)
             ground_truth_list.append(ground_truth)
 
@@ -287,6 +295,32 @@ def main(cfg: DictConfig):
                                                     ground_truth[:, None],
                                                     water_threshold=water_threshold)
 
+            # Compute global mass for epoch
+            if INCLUDE_GLOBAL_PHYSICS_LOSS:
+                assert REMOVE_GHOST_NODES, "To compute global physics loss, ghost nodes must be removed."
+                assert TARGET_VARIABLE == 'volume', "Global mass conservation loss can only be computed when target variable is 'volume'."
+
+                prev_water_volume = volume_window[:, -1].clone()
+                prev_water_volume = HydroGraphDataset.denormalize(prev_water_volume, target_mean, target_std)
+                prev_water_volume = torch.clip(prev_water_volume, min=0)
+
+                total_inflow = inflow_seq[t].clone()
+                inflow_mean = test_dataset.dynamic_stats["inflow_hydrograph"]["mean"]
+                inflow_std = test_dataset.dynamic_stats["inflow_hydrograph"]["std"]
+                total_inflow = HydroGraphDataset.denormalize(total_inflow, inflow_mean, inflow_std)
+
+                total_rainfall = vol_precipitation_seq[t]
+
+                total_outflow = outflow_seq[t]
+
+                validation_stats.update_physics_informed_stats_for_timestep(
+                    rollout[:, None],
+                    prev_water_volume[:, None],
+                    total_inflow,
+                    total_outflow,
+                    total_rainfall
+                )
+
             # Compute RMSE for this rollout step.
             rmse = torch.sqrt(torch.mean((new_wd.squeeze(1) - wd_gt_seq[t]) ** 2)).item()
             rmse_list.append(rmse)
@@ -298,6 +332,7 @@ def main(cfg: DictConfig):
         print(f"Hydrograph {sample_id}: Mean RMSE = {mean_rmse_sample:.4f}")
 
         validation_stats.print_stats_summary()
+        logger.log("===========================")
 
         metrics_filename = f"HydroGraphNet_runid_{sample_id}_metrics.npz"
         metrics_path = os.path.join(metrics_output_dir, metrics_filename)

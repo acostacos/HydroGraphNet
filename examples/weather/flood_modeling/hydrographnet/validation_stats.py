@@ -4,10 +4,16 @@ import time
 
 from torch import Tensor
 from logging_utils import Logger
+from physics_loss import GlobalMassConservationLoss
 from metric_utils import RMSE, MAE, NSE, CSI
+from typing import Optional
 
 class ValidationStats:
-    def __init__(self, logger: Logger = None):
+    def __init__(self,
+                 logger: Logger = None,
+                 delta_t: Optional[int] = None):
+        self.delta_t = delta_t
+
         self.val_start_time = None
         self.val_end_time = None
         self.pred_list = []
@@ -25,6 +31,9 @@ class ValidationStats:
         self.nse_flooded_list = []
         self.csi_flooded_list = []
 
+        # ======== Physics-informed stats ========
+        self.global_mass_loss_list = []
+
         self.log = print
         if logger is not None and hasattr(logger, 'log'):
             self.log = logger.log
@@ -37,6 +46,9 @@ class ValidationStats:
     
     def get_inference_time(self):
         return (self.val_end_time - self.val_start_time) / len(self.pred_list)
+
+    def get_total_global_mass_loss(self) -> float:
+        return float(np.sum(self.global_mass_loss_list))
 
     def update_stats_for_epoch(self,
                                pred: Tensor,
@@ -74,6 +86,16 @@ class ValidationStats:
         flooded_target = target[flooded_mask]
         return flooded_pred, flooded_target
 
+    def update_physics_informed_stats_for_timestep(self,
+                                                   pred: Tensor,
+                                                   prev_node_pred: Tensor,
+                                                   total_inflow: Tensor,
+                                                   total_outflow: Tensor,
+                                                   total_rainfall: Tensor):
+        global_mass_loss_func = GlobalMassConservationLoss(mode='test', delta_t=self.delta_t)
+        global_mass_loss = global_mass_loss_func(pred, prev_node_pred, total_inflow, total_outflow, total_rainfall)
+        self.global_mass_loss_list.append(global_mass_loss.cpu().item())
+
     def print_stats_summary(self):
         if len(self.rmse_list) > 0:
             rmse_np = np.array(self.rmse_list)
@@ -100,7 +122,11 @@ class ValidationStats:
             csi_flooded_np = np.array(self.csi_flooded_list)
             self.log(f'Average CSI (flooded): {csi_flooded_np.mean():.4f}')
 
+        if len(self.global_mass_loss_list) > 0:
+            self.log(f'\nTotal Global Mass Conservation Loss: {self.get_total_global_mass_loss():.4e}')
+
         if self.val_start_time is not None and self.val_end_time is not None:
+            self.log(f'\nValidation time: {self.val_end_time - self.val_start_time:.2f} seconds')
             self.log(f'Inference time for one timestep: {self.get_inference_time():.4f} seconds')
 
     def save_stats(self, filepath: str):
@@ -118,7 +144,8 @@ class ValidationStats:
             'rmse_flooded': np.array(self.rmse_flooded_list),
             'mae_flooded': np.array(self.mae_flooded_list),
             'nse_flooded': np.array(self.nse_flooded_list),
-            'csi_flooded': np.array(self.csi_flooded_list)
+            'csi_flooded': np.array(self.csi_flooded_list),
+            'global_mass_loss': np.array(self.global_mass_loss_list),
         }
         np.savez(filepath, **stats)
 
