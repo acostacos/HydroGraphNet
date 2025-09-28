@@ -291,7 +291,7 @@ def main(cfg: DictConfig):
                 ground_truth = ground_truth[:START_GHOST_NODE_IDX]
                 area = area[:START_GHOST_NODE_IDX]
 
-            water_threshold = 0.05 if TARGET_VARIABLE == 'water_depth' else area
+            water_threshold = 0.05 if TARGET_VARIABLE == 'water_depth' else area * 0.05
             validation_stats.update_stats_for_epoch(rollout[:, None],
                                                     ground_truth[:, None],
                                                     water_threshold=water_threshold)
