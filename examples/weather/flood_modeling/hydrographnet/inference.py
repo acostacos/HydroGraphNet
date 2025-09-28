@@ -223,6 +223,7 @@ def main(cfg: DictConfig):
         # Rollout data tensors.
         # Note: inflow_seq is a 1D tensor of length rollout_length.
         inflow_seq = rollout_data["inflow"].to(device)
+        denorm_inflow_seq = rollout_data["denorm_inflow"].to(device)
         precip_seq = rollout_data["precipitation"].to(device)
         wd_gt_seq = rollout_data["water_depth_gt"].to(device)
         volume_gt = rollout_data["volume_gt"].to(device)
@@ -304,13 +305,8 @@ def main(cfg: DictConfig):
                 prev_water_volume = HydroGraphDataset.denormalize(prev_water_volume, target_mean, target_std)
                 prev_water_volume = torch.clip(prev_water_volume, min=0)
 
-                total_inflow = inflow_seq[t].clone()
-                inflow_mean = test_dataset.dynamic_stats["inflow_hydrograph"]["mean"]
-                inflow_std = test_dataset.dynamic_stats["inflow_hydrograph"]["std"]
-                total_inflow = HydroGraphDataset.denormalize(total_inflow, inflow_mean, inflow_std)
-
+                total_inflow = denorm_inflow_seq[t]
                 total_rainfall = vol_precipitation_seq[t]
-
                 total_outflow = outflow_seq[t]
 
                 validation_stats.update_physics_informed_stats_for_timestep(
@@ -332,11 +328,12 @@ def main(cfg: DictConfig):
         print(f"Hydrograph {sample_id}: Mean RMSE = {mean_rmse_sample:.4f}")
 
         validation_stats.print_stats_summary()
-        logger.log("===========================")
 
         metrics_filename = f"HydroGraphNet_runid_{sample_id}_metrics.npz"
         metrics_path = os.path.join(metrics_output_dir, metrics_filename)
         validation_stats.save_stats(metrics_path)
+
+        logger.log("===========================")
 
         # anim_filename = os.path.join(anim_output_dir, f"animation_{sample_id}.gif")
         # create_animation(rollout_preds, ground_truth_list, g, rmse_list, anim_filename)

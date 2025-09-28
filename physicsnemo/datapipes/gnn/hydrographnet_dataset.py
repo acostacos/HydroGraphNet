@@ -571,12 +571,17 @@ class HydroGraphDataset(DGLDataset):
             g.ndata["x"] = torch.tensor(node_features, dtype=torch.float)
             T = dyn["water_depth"].shape[0]
             rollout = self.rollout_length if self.rollout_length is not None else (T - self.n_time_steps)
-            outflow = torch.tensor(dyn["outflow_hydrograph"][end_idx:end_idx + rollout], dtype=torch.float) if dyn["outflow_hydrograph"] is not None else None
-            vol_precipitation = torch.tensor(dyn["vol_precipitation"][end_idx:end_idx + rollout], dtype=torch.float) if dyn["vol_precipitation"] is not None else None
+            outflow = torch.tensor(dyn["outflow_hydrograph"][end_idx-1:end_idx + rollout-1], dtype=torch.float) if dyn["outflow_hydrograph"] is not None else None
+            vol_precipitation = torch.tensor(dyn["vol_precipitation"][end_idx-1:end_idx + rollout-1], dtype=torch.float) if dyn["vol_precipitation"] is not None else None
+            denorm_inflow = torch.tensor(dyn["inflow_hydrograph"][end_idx-1:end_idx + rollout-1] *
+                                         self.dynamic_stats["inflow_hydrograph"]["std"] +
+                                         self.dynamic_stats["inflow_hydrograph"]["mean"], dtype=torch.float)
+
             rollout_data = {
                 "inflow": torch.tensor(
                     dyn["inflow_hydrograph"][end_idx:end_idx + rollout],
                     dtype=torch.float),
+                "denorm_inflow": denorm_inflow,
                 "outflow": outflow,
                 "precipitation": torch.tensor(
                     dyn["precipitation"][end_idx:end_idx + rollout],
