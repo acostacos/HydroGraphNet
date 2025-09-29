@@ -177,7 +177,7 @@ def create_dynamic_text_files(hec_ras_filepath: str,
     volume = get_water_volume(hec_ras_filepath)
     total_water_volume = volume.sum(axis=1)
     peak_idx = np.argmax(total_water_volume).item()
-    end_idx = peak_idx + ts_from_peak_water_volume
+    end_idx = peak_idx + ts_from_peak_water_volume if ts_from_peak_water_volume else None
 
     water_depth = get_water_depth(hec_ras_filepath, node_shp_filepath)
     water_depth = water_depth[spin_up_timesteps:end_idx]
