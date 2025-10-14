@@ -864,7 +864,7 @@ class HydroGraphDataset(DGLDataset):
             manning,
             flow_accum,
             infiltration,
-            flow_hydrograph_current_step,
+            # flow_hydrograph_current_step,
             precip_current_step,
             water_depth.T,
             volume.T

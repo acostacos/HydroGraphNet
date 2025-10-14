@@ -184,7 +184,7 @@ class MGNTrainer:
         if self.noise_type == "pushforward":
             with autocast(enabled=self.amp):
                 X = graph.ndata["x"]
-                n_static = 12  # assumed static features dimension
+                n_static = 11  # assumed static features dimension
                 n_time = (X.shape[1] - n_static) // 2
                 static_part = X[:, :n_static]
                 water_depth_full = X[:, n_static:n_static + n_time]
