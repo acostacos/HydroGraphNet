@@ -224,7 +224,7 @@ def main():
     base_dataset_folder = f"outputs_phy/hecras_data"
     prefix = "M80"
     spin_up_timesteps = 864
-    ts_from_peak_water_volume = 24 # Set to None to disable
+    ts_from_peak_water_volume = None # Set to None to disable
     downsample_interval = 3
 
     # Get important paths
