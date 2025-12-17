@@ -14,6 +14,7 @@ def get_info_from_config(config_file_path: str, root_dir: str) -> dict:
     dataset_config = config['dataset_parameters']
     nodes_shp_path = os.path.join(root_dir, 'raw', dataset_config['nodes_shp_file'])
     edges_shp_path = os.path.join(root_dir, 'raw', dataset_config['edges_shp_file'])
+    dem_path = os.path.join(root_dir, 'raw', dataset_config['dem_file'])
     train_summary_path = os.path.join(root_dir, 'raw', dataset_config['training']['dataset_summary_file'])
     test_summary_path = os.path.join(root_dir, 'raw', dataset_config['testing']['dataset_summary_file'])
     inflow_boundary_nodes = dataset_config['inflow_boundary_nodes']
@@ -22,6 +23,7 @@ def get_info_from_config(config_file_path: str, root_dir: str) -> dict:
     return {
         'nodes_shp_path': nodes_shp_path,
         'edges_shp_path': edges_shp_path,
+        'dem_path': dem_path,
         'train_summary_path': train_summary_path,
         'test_summary_path': test_summary_path,
         'inflow_boundary_nodes': inflow_boundary_nodes,
@@ -220,7 +222,6 @@ def create_dynamic_text_files(hec_ras_filepath: str,
 def main():
     root_dir = ""
     config_file_path = ""
-    dem_path = ""
     base_dataset_folder = f"outputs_phy/hecras_data"
     prefix = "M80"
     spin_up_timesteps = 864
@@ -246,7 +247,7 @@ def main():
     sample_hec_ras_path = next(iter(train_hec_ras_paths.values()))
     create_constant_text_files(sample_hec_ras_path,
                                info['nodes_shp_path'],
-                               dem_path,
+                               info['dem_path'],
                                base_dataset_folder,
                                prefix)
 
