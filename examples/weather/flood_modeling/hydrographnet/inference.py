@@ -298,16 +298,11 @@ def main(cfg: DictConfig):
                 ground_truth = HydroGraphDataset.denormalize(ground_truth, target_mean, target_std)
                 ground_truth = torch.clip(ground_truth, min=0)
 
-            area = rollout_data['area']
             if REMOVE_GHOST_NODES:
                 rollout = rollout[:START_GHOST_NODE_IDX]
                 ground_truth = ground_truth[:START_GHOST_NODE_IDX]
-                area = area[:START_GHOST_NODE_IDX]
 
-            water_threshold = 0.05 if TARGET_VARIABLE == 'water_depth' else area * 0.05
-            validation_stats.update_stats_for_epoch(rollout[:, None],
-                                                    ground_truth[:, None],
-                                                    water_threshold=water_threshold)
+            validation_stats.add_pred_for_timestep(pred=rollout[:, None], target=ground_truth[:, None])
 
             # Compute global mass for epoch
             if INCLUDE_GLOBAL_PHYSICS_LOSS:
@@ -322,7 +317,7 @@ def main(cfg: DictConfig):
                 total_rainfall = vol_precipitation_seq[t]
                 total_outflow = outflow_seq[t]
 
-                validation_stats.update_physics_informed_stats_for_timestep(
+                validation_stats.compute_physics_informed_stats_for_timestep(
                     rollout[:, None],
                     prev_water_volume[:, None],
                     total_inflow,
@@ -340,6 +335,13 @@ def main(cfg: DictConfig):
         sample_id = test_dataset.dynamic_data[idx].get('hydro_id', idx)
         print(f"Hydrograph {sample_id}: Mean RMSE = {mean_rmse_sample:.4f}")
 
+        water_threshold = 0.05
+        if TARGET_VARIABLE == 'volume':
+            area = rollout_data['area']
+            if REMOVE_GHOST_NODES and isinstance(area, torch.Tensor):
+                area = area[:START_GHOST_NODE_IDX]
+            water_threshold = area * 0.05
+        validation_stats.compute_overall_stats(water_threshold=water_threshold)
         validation_stats.print_stats_summary()
 
         metrics_filename = f"HydroGraphNet_runid_{sample_id}_metrics.npz"
